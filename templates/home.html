@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Lista de Tareas</h2>
+
+<ul>
+    {% for todo in todos %}
+        <li>
+            {{ todo.title }} — 
+            {% if todo.completed %} ✓ {% else %} Pending {% endif %}
+        </li>
+    {% empty %}
+        <li>No hay tareas todavía.</li>
+    {% endfor %}
+</ul>
+
+
+
+{% endblock %}
