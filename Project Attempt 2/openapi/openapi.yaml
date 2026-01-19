@@ -1,0 +1,265 @@
+openapi: 3.0.3
+info:
+  title: College Mayor Elections API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 6}
+    TokenResponse:
+      type: object
+      required: [access_token, token_type]
+      properties:
+        access_token: {type: string}
+        token_type: {type: string, example: bearer}
+    MeResponse:
+      type: object
+      required: [id, email, role, voter_type, is_eligible]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        role: {type: string, enum: [ADMIN, VOTER]}
+        voter_type: {type: string, enum: [STUDENT, FACULTY]}
+        is_eligible: {type: boolean}
+    Election:
+      type: object
+      required: [id, name, starts_at, ends_at, status]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        starts_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+        status: {type: string, enum: [DRAFT, OPEN, CLOSED]}
+    CreateElectionRequest:
+      type: object
+      required: [name, starts_at, ends_at]
+      properties:
+        name: {type: string}
+        starts_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+    Candidate:
+      type: object
+      required: [id, election_id, full_name, manifesto]
+      properties:
+        id: {type: string, format: uuid}
+        election_id: {type: string, format: uuid}
+        full_name: {type: string}
+        manifesto: {type: string}
+        photo_url: {type: string, nullable: true}
+    CreateCandidateRequest:
+      type: object
+      required: [full_name, manifesto]
+      properties:
+        full_name: {type: string}
+        manifesto: {type: string}
+        photo_url: {type: string, nullable: true}
+    VoteRequest:
+      type: object
+      required: [candidate_id]
+      properties:
+        candidate_id: {type: string, format: uuid}
+    MyVoteResponse:
+      type: object
+      required: [election_id, candidate_id, created_at]
+      properties:
+        election_id: {type: string, format: uuid}
+        candidate_id: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+    ResultsResponse:
+      type: object
+      required: [election_id, status, totals]
+      properties:
+        election_id: {type: string, format: uuid}
+        status: {type: string, enum: [DRAFT, OPEN, CLOSED]}
+        totals:
+          type: array
+          items:
+            type: object
+            required: [candidate_id, full_name, votes]
+            properties:
+              candidate_id: {type: string, format: uuid}
+              full_name: {type: string}
+              votes: {type: integer, minimum: 0}
+    AuditEvent:
+      type: object
+      required: [id, type, created_at, payload]
+      properties:
+        id: {type: string, format: uuid}
+        type: {type: string}
+        created_at: {type: string, format: date-time}
+        payload: {type: object}
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TokenResponse'}
+  /me:
+    get:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MeResponse'}
+  /elections:
+    get:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Election'}
+    post:
+      summary: Create election (admin)
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Election'}
+  /elections/{election_id}:
+    get:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Election'}
+  /elections/{election_id}/open:
+    post:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Opened}
+  /elections/{election_id}/close:
+    post:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200': {description: Closed}
+  /elections/{election_id}/candidates:
+    get:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Candidate'}
+    post:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateCandidateRequest'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Candidate'}
+  /elections/{election_id}/vote:
+    post:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VoteRequest'}
+      responses:
+        '201': {description: Vote recorded}
+        '403': {description: Not eligible}
+        '409': {description: Already voted}
+  /elections/{election_id}/my-vote:
+    get:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MyVoteResponse'}
+        '404': {description: Not found}
+  /elections/{election_id}/results:
+    get:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ResultsResponse'}
+  /elections/{election_id}/audit:
+    get:
+      parameters:
+        - in: path
+          name: election_id
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AuditEvent'}
